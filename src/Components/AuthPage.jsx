@@ -1,9 +1,18 @@
 /* eslint-disable react/prop-types */
 import { useState, useEffect, useCallback } from "react";
+import { useForm } from "react-hook-form";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useLogin, useRegister, useGoogleLogin } from "../hooks/useQueries";
-import { Mail, Lock, User, Loader, TriangleAlert } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  User,
+  Loader,
+  TriangleAlert,
+  EyeIcon,
+  EyeOffIcon,
+} from "lucide-react";
 import { GoogleLogin } from "@react-oauth/google";
 import LoaderTwo from "./loaders/LoaderTwo";
 import { Button } from "./ui/button";
@@ -18,26 +27,30 @@ import {
   CardTitle,
 } from "./ui/card";
 import { Alert, AlertDescription } from "./ui/alert";
+import Footer from "./Footer";
 import { Separator } from "./ui/separator";
 import BgImage from "../assets/bg-4.jpg";
 
 const AuthPage = ({ notify }) => {
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    confirmPassword: "",
-    username: "",
-  });
   const [submitLoader, setSubmitLoader] = useState(false);
   const [submitLoader2, setSubmitLoader2] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [apiError, setApiError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
   const navigate = useNavigate();
   const login = useLogin();
   const register = useRegister();
   const googleLogin = useGoogleLogin();
   const location = useLocation();
+
+  const {
+    register: rhfRegister,
+    handleSubmit: handleFormSubmit,
+    formState: { errors },
+    watch,
+    reset,
+  } = useForm();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -48,48 +61,33 @@ const AuthPage = ({ notify }) => {
   useEffect(() => {
     if (location.pathname === "/register") {
       setIsLogin(false);
+    } else {
+      setIsLogin(true);
     }
-  }, [location]);
+    reset();
+  }, [location, reset]);
 
   const clearError = useCallback(() => {
     const timer = setTimeout(() => {
-      setErrorMessage("");
-    }, 4000);
+      setApiError("");
+    }, 5000);
     return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    if (errorMessage) {
+    if (apiError) {
       clearError();
     }
-  }, [errorMessage, clearError]);
+  }, [apiError, clearError]);
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handlePasswordChange = () => {
-    if (formData.password !== formData.confirmPassword) {
-      setErrorMessage("Passwords do not match");
-    }
-    return;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const onSubmit = async (data) => {
     setSubmitLoader(true);
-    setErrorMessage("");
-
-    if (!isLogin && formData.password !== formData.confirmPassword) {
-      setErrorMessage("Passwords do not match");
-      setSubmitLoader(false);
-      return;
-    }
+    setApiError("");
 
     const mutationFn = isLogin ? login : register;
     const payload = isLogin
-      ? { email: formData.email, password: formData.password }
-      : formData;
+      ? { email: data.email, password: data.password }
+      : data;
 
     try {
       await mutationFn.mutateAsync(payload);
@@ -98,12 +96,12 @@ const AuthPage = ({ notify }) => {
         "success"
       );
       if (!isLogin) {
-        localStorage.setItem("verificationEmail", formData.email);
+        localStorage.setItem("verificationEmail", data.email);
       }
       navigate(isLogin ? "/dashboard" : "/verify");
     } catch (error) {
       console.error("Error:", error);
-      setErrorMessage(error.message);
+      setApiError(error.message);
       notify(isLogin ? "Login failed" : "Registration failed", "error");
     } finally {
       setSubmitLoader(false);
@@ -118,7 +116,7 @@ const AuthPage = ({ notify }) => {
       navigate("/dashboard");
     } catch (error) {
       console.error("Error:", error);
-      setErrorMessage(error.message);
+      setApiError(error.message);
       notify("Google login failed", "error");
     } finally {
       setSubmitLoader2(false);
@@ -127,7 +125,7 @@ const AuthPage = ({ notify }) => {
 
   const handleGoogleLoginError = () => {
     console.error("Google login failed");
-    setErrorMessage("Google login failed. Please try again.");
+    setApiError("Google login failed. Please try again.");
     notify("Google login failed", "error");
   };
 
@@ -135,7 +133,7 @@ const AuthPage = ({ notify }) => {
     <LoaderTwo />
   ) : (
     <div className="flex min-h-screen bg-background">
-      <div className="flex flex-col justify-center flex-1 px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
+      <div className="flex flex-col justify-center flex-1 px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24 mb-0 md:mb-14">
         <div className="flex justify-center h-16 px-4">
           <Link to="/" className="flex items-center gap-2 font-semibold">
             <span className="text-4xl md:6xl hover:text-gray-700">
@@ -146,7 +144,7 @@ const AuthPage = ({ notify }) => {
         <div className="w-full max-w-sm mx-auto lg:w-96">
           <Card>
             <CardHeader className="space-y-1">
-              <CardTitle className="text-2xl font-bold tracking-tight">
+              <CardTitle>
                 {isLogin ? "Sign in to your account" : "Create an account"}
               </CardTitle>
               <CardDescription>
@@ -156,44 +154,57 @@ const AuthPage = ({ notify }) => {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
-              {errorMessage && (
+              {apiError && (
                 <Alert variant="destructive">
                   <AlertDescription className="flex items-center gap-4">
                     {
                       <TriangleAlert className="h-4 w-4 text-muted-foreground" />
                     }
-                    {errorMessage}!
+                    {apiError}!
                   </AlertDescription>
                 </Alert>
               )}
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleFormSubmit(onSubmit)} className="space-y-4">
                 {!isLogin && (
                   <div className="space-y-2">
                     <Label htmlFor="username">Username</Label>
-                    <Input
-                      id="username"
-                      name="username"
-                      type="text"
-                      required={!isLogin}
-                      value={formData.username}
-                      onChange={handleChange}
-                      placeholder="JohnDoe"
-                      icon={<User className="h-4 w-4 text-muted-foreground" />}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="username"
+                        type="text"
+                        placeholder="JohnDoe"
+                        {...rhfRegister("username", {
+                          required: "Username is required",
+                        })}
+                      />
+                      <User className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 transform -translate-y-1/2" />
+                    </div>
+                    {errors.username && (
+                      <p className="text-sm text-destructive">
+                        {errors.username.message}
+                      </p>
+                    )}
                   </div>
                 )}
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="john@example.com"
-                    icon={<Mail className="h-4 w-4 text-muted-foreground" />}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="email"
+                      type="email"
+                      disabled={submitLoader}
+                      placeholder="john@example.com"
+                      {...rhfRegister("email", {
+                        required: "Email is required",
+                      })}
+                    />
+                    <Mail className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 transform -translate-y-1/2" />
+                  </div>
+                  {errors.email && (
+                    <p className="text-sm text-destructive">
+                      {errors.email.message}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -207,34 +218,86 @@ const AuthPage = ({ notify }) => {
                       </Link>
                     )}
                   </div>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    required
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="••••••••"
-                    icon={<Lock className="h-4 w-4 text-muted-foreground" />}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      disabled={submitLoader}
+                      placeholder="Enter Password"
+                      {...rhfRegister("password", {
+                        required: "Password is required",
+                        minLength: {
+                          value: 6,
+                          message: "Password must be at least 6 characters",
+                        },
+                      })}
+                    />
+                    <Lock className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 transform -translate-y-1/2" />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-4 w-4 rounded-full absolute right-10 top-1/2 transform -translate-y-1/2"
+                      onClick={() => {
+                        setShowPassword((prev) => !prev);
+                      }}
+                    >
+                      {showPassword ? (
+                        <EyeIcon className="text-muted-foreground" />
+                      ) : (
+                        <EyeOffIcon className="text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
+                  {errors.password && (
+                    <p className="text-sm text-destructive">
+                      {errors.password.message}
+                    </p>
+                  )}
                   {!isLogin && (
                     <>
                       <Label htmlFor="confirmPassword">Confirm password</Label>
-                      <Input
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        type="password"
-                        required
-                        value={formData.confirmPassword}
-                        onChange={(e) => {
-                          handleChange(e);
-                          handlePasswordChange(e);
-                        }}
-                        placeholder="••••••••"
-                        icon={
-                          <Lock className="h-4 w-4 text-muted-foreground" />
-                        }
-                      />
+                      <div className="relative">
+                        <Input
+                          id="confirmPassword"
+                          type={showPassword ? "text" : "password"}
+                          disabled={submitLoader}
+                          placeholder="Confirm Password"
+                          {...rhfRegister("confirmPassword", {
+                            required: "Please confirm your password",
+                            validate: (value) =>
+                              value === watch("password") ||
+                              "Passwords do not match",
+                          })}
+                        />
+                        <Lock className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 transform -translate-y-1/2" />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-4 w-4 rounded-full absolute right-10 top-1/2 transform -translate-y-1/2"
+                          onClick={() => {
+                            setShowPassword((prev) => !prev);
+                          }}
+                        >
+                          {showPassword ? (
+                            <EyeIcon
+                              className="text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <EyeOffIcon
+                              className="text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          )}
+                        </Button>
+                      </div>
+                      {errors.confirmPassword && (
+                        <p className="text-sm text-destructive">
+                          {errors.confirmPassword.message}
+                        </p>
+                      )}
                     </>
                   )}
                 </div>
@@ -247,9 +310,11 @@ const AuthPage = ({ notify }) => {
                 >
                   {submitLoader ? (
                     <span className="flex items-center justify-center gap-2 text-xs md:text-base">
-                    <Loader className="h-8 w-8 animate-spin" />
-                    {isLogin? "login in progress..." : "Account creation in progress..."}
-                  </span>
+                      <Loader className="h-8 w-8 animate-spin" />
+                      {isLogin
+                        ? "login in progress..."
+                        : "Account creation in progress..."}
+                    </span>
                   ) : isLogin ? (
                     "Sign In"
                   ) : (
@@ -273,7 +338,12 @@ const AuthPage = ({ notify }) => {
                 onSuccess={handleGoogleLoginSuccess}
                 onError={handleGoogleLoginError}
                 useOneTap
-                className="w-full"
+                size="large"
+                theme="filled_blue"
+                width={330}
+                shape="pill"
+                type="standard"
+                text={isLogin ? "signin_with" : "signup_with"}
               ></GoogleLogin>
             </CardContent>
             <CardFooter>
@@ -283,7 +353,10 @@ const AuthPage = ({ notify }) => {
                   : "Already have an account?"}{" "}
                 <button
                   type="button"
-                  onClick={() => setIsLogin(!isLogin)}
+                  onClick={() => {
+                    setIsLogin(!isLogin);
+                    reset();
+                  }}
                   className="font-medium text-primary hover:underline"
                 >
                   {isLogin ? "Sign up" : "Sign in"}
@@ -293,13 +366,18 @@ const AuthPage = ({ notify }) => {
           </Card>
         </div>
       </div>
-      <div className="hidden md:block flex-1 my-auto">
+      <div
+        className={`hidden md:block flex-1 my-auto mb-0 ${
+          isLogin ? "md:mb-24" : "md:mb-36"
+        }`}
+      >
         <img
           className="object-cover w-11/12 h-5/6 rounded-md"
           src={BgImage}
           alt="Background"
         />
       </div>
+      <Footer />
     </div>
   );
 };

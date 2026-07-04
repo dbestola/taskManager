@@ -66,12 +66,6 @@
   }
 }
 
-:root {
-  --toastify-toast-min-height: 30px;
-  --toastify-toast-max-height: 500px;
-  --toastify-toast-padding: @apply p-2 md:p-4;
-}
-
 * {
   scroll-behavior: smooth;
 }
@@ -85,12 +79,4 @@ html {
 
 button {
   cursor: pointer;
-}
-
-.Toastify__toast-container{
-  @apply w-52 md:w-72 fixed top-1 left-1 !important;
-}
-
-.Toastify__toast {
-  @apply text-sm md:text-lg !important;
 }

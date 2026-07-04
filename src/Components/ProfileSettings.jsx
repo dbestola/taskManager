@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { Loader2, User } from "lucide-react";
@@ -61,51 +61,48 @@ const ProfileSettings = ({ notify }) => {
 
   useEffect(() => {
     if (error) {
-      clearError();
+      return clearError();
     }
   }, [error, clearError]);
 
   // Cloudinary configuration
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
   const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
-  const [secureUrl, setSecureUrl] = useState("");
-
-  const imgUrl = secureUrl;
 
   // Upload Widget Configuration
-  const uwConfig = {
-    cloudName,
-    uploadPreset,
-    cropping: true,
-    maxImageFileSize: 2000000,
-    clientAllowedFormats: 'image',
-    croppingCoordinatesMode: 'custom'
-    // showAdvancedOptions: true,  //add advanced options (public_id and tag)
-    // sources: [ "local", "url"], // restrict the upload sources to URL and local files
-    // multiple: false,  //restrict upload to a single file
-    // folder: "user_images", //upload files to the specified folder
-    // tags: ["users", "profile"], //add the given tags to the uploaded files
-    // context: {alt: "user_uploaded"}, //add the given context data to the uploaded files
-    // maxImageWidth: 2000, //Scales the image down to a width of 2000 pixels before uploading
-    // theme: "purple", //change to a purple theme
-  };
+  const uwConfig = useMemo(
+    () => ({
+      cloudName,
+      uploadPreset,
+      cropping: true,
+      croppingAspectRatio: 1,
+      maxImageFileSize: 2000000,
+      clientAllowedFormats: ["jpg", "jpeg", "png", "webp"],
+      croppingCoordinatesMode: "custom",
+      croppingDefaultSelectionRatio: 0.85,
+      croppingShowDimensions: true,
+      multiple: false,
+      showSkipCropButton: false,
+    }),
+    [cloudName, uploadPreset]
+  );
 
-  const handleImageChange = useCallback(() => {
+  const handleImageUploadSuccess = useCallback((imageUrl) => {
     setFormData((prev) => ({
       ...prev,
-      profilePicture: imgUrl,
+      profilePicture: imageUrl,
     }));
-    setImagePreview(imgUrl);
-  }, [imgUrl]);
+    setImagePreview(imageUrl);
+    setError("");
+  }, []);
 
-  const imageRef = useRef(null);
-
-  useEffect(() => {
-    if (imgUrl && imageRef.current !== imgUrl) {
-      imageRef.current = imgUrl;
-      handleImageChange(imgUrl);
-    }
-  }, [imgUrl, handleImageChange]);
+  const handleImageUploadError = useCallback(
+    (message = "We couldn't update the image. Please try again.") => {
+      setError(message);
+      notify(message, "error");
+    },
+    [notify]
+  );
 
   const updateProfileMutation = useUpdateProfile();
 
@@ -115,7 +112,7 @@ const ProfileSettings = ({ notify }) => {
     setIsSubmitting(true);
 
     try {
-      if (user?.isVerified == false) {
+      if (user?.isVerified === false) {
         throw new Error("You need to verify your email to edit your profile");
       }
       if (!formData.username.trim()) {
@@ -155,7 +152,12 @@ const ProfileSettings = ({ notify }) => {
     } catch (error) {
       setError(error.message);
       notify(error.message, "error");
-      setImagePreview(user?.profilePicture || "");
+      const savedProfilePicture = user?.profilePicture || "";
+      setImagePreview(savedProfilePicture);
+      setFormData((prev) => ({
+        ...prev,
+        profilePicture: savedProfilePicture,
+      }));
     } finally {
       setIsSubmitting(false);
     }
@@ -192,17 +194,12 @@ const ProfileSettings = ({ notify }) => {
                     <User className="h-12 w-12" />
                   </AvatarFallback>
                 </Avatar>
-                <div>
-                  <Label
-                    htmlFor="picture"
-                    className="absolute bottom-0 right-0 p-1 bg-primary text-primary-foreground rounded-full cursor-pointer hover:bg-primary/90 transition-colors"
-                  >
-                    <CloudinaryUploadWidget
-                      uploadConfig={uwConfig}
-                      getSecureUrl={setSecureUrl}
-                    />
-                  </Label>
-                </div>
+                <CloudinaryUploadWidget
+                  uploadConfig={uwConfig}
+                  onUploadSuccess={handleImageUploadSuccess}
+                  onUploadError={handleImageUploadError}
+                  className="absolute bottom-0 right-0 p-1 bg-primary text-primary-foreground rounded-full cursor-pointer hover:bg-primary/90 transition-colors"
+                />
               </div>
               <p className="text-sm text-muted-foreground">
                 Click the camera icon to update your profile picture
